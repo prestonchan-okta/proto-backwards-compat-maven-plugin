@@ -242,7 +242,8 @@ public class BackwardsCompatibilityCheckMojo
     }
 
     private Process executeProtolock(Path exePath, String command, String pathEnv, String pluginsOption,
-                                     String lockDirOption, String otherOptions, File protoRoot) throws IOException {
+                                     String lockDirOption, String otherOptions, File protoRoot)
+            throws IOException, InterruptedException {
         String[] cmdLineParameters = new String[]{
             exePath.toString(),
             command,
@@ -250,8 +251,21 @@ public class BackwardsCompatibilityCheckMojo
             pluginsOption,
             otherOptions
         };
-        Process protolockProcess =
-                Runtime.getRuntime().exec(cmdLineParameters, new String[]{pathEnv}, protoRoot);
+
+        Process protolockProcess = null;
+        int attempts = 0;
+        while (protolockProcess == null) {
+            try {
+                protolockProcess = Runtime.getRuntime().exec(cmdLineParameters, new String[]{pathEnv}, protoRoot);
+            } catch (final IOException e) {
+                if (attempts++ > 3) {
+                    throw e;
+                }
+                getLog().info("Failed to execute protolock. Retrying: " + e);
+                Thread.sleep(1000);
+            }
+        }
+
         BufferedReader stdInput = new BufferedReader(new InputStreamReader(protolockProcess.getInputStream()));
         String s;
         while ((s = stdInput.readLine()) != null) {
